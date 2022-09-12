@@ -1,0 +1,11 @@
+﻿CREATE TRIGGER dbo.T_User_Trigger
+    ON dbo.[user] 
+    INSTEAD OF DELETE
+AS
+BEGIN
+	DELETE FROM dbo.profile_following
+	WHERE id_user_observer = (SELECT id_user FROM deleted) OR id_user_target = (SELECT id_user FROM deleted);
+
+	DELETE [user] FROM deleted d
+	INNER JOIN dbo.[user] u ON u.id_user = d.id_user;
+END
