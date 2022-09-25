@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Microsoft.Extensions.DependencyModel;
+using System.ComponentModel.DataAnnotations;
 
 namespace realworld_api.Models
 {

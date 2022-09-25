@@ -7,7 +7,6 @@ using realworld_api.Models;
 using realworld_api.Services;
 using realworld_api.Validations;
 using Slugify;
-using System.Diagnostics;
 
 namespace realworld_api.Controllers
 {
@@ -22,6 +21,68 @@ namespace realworld_api.Controllers
         {
             _context = context;
             _userService = userService;
+        }
+
+        [HttpGet]
+        [Route("{slug}")]
+        public async Task<ActionResult<ArticleResponse>> Get(string slug)
+        {
+            var currentArticle = await _context.article
+                .Include(a => a.author)
+                .Include(a => a.tags)
+                .ThenInclude(t => t.tag)
+                .SingleOrDefaultAsync(a => a.slug.ToLower().Trim().Equals(slug.ToLower().Trim()));
+
+            if (currentArticle == null) return NotFound();
+
+            string[] tags = currentArticle.tags.Select(t => t.tag.name).ToArray();
+            ArticleResponse articleResponse = new()
+            {
+                article = new()
+                {
+                    slug = currentArticle.slug,
+                    title = currentArticle.title,
+                    description = currentArticle.description,
+                    body = currentArticle.body,
+                    tagList = tags,
+                    article_created_at = currentArticle.article_created_at,
+                    article_updated_at = currentArticle.article_updated_at,
+                    favorited = await IsFavorited(_userService.GetUsername(), currentArticle.slug),
+                    favorites_count = currentArticle.favorites_count,
+                    author = new()
+                    {
+                        username = currentArticle.author.username,
+                        bio = currentArticle.author.bio,
+                        following = await IsFollowed(_userService.GetUsername(), currentArticle.author.username),
+                        image = currentArticle.author.image
+                    }
+                }
+            };
+            return Ok(articleResponse);
+        }
+
+        [HttpGet, Authorize, AllowAnonymous]
+        public ActionResult List([FromQuery] string? tag, string? author, string? favorited, int limit = 20, int offset = 0)
+        {
+            string tagQ = (string.IsNullOrEmpty(tag)) ? string.Empty : tag.ToLower().Trim();
+            string authorQ = (string.IsNullOrEmpty(author)) ? string.Empty : author.ToLower().Trim();
+            string favoritedQ = (string.IsNullOrEmpty(favorited)) ? string.Empty : favorited.ToLower().Trim();
+
+            var listArticles =
+                from a in _context.article
+                join u in _context.user on a.id_author equals u.id_user
+                join at2 in _context.article_tag on a.id_article equals at2.id_article
+                join t in _context.tag on at2.id_tag equals t.id_tag
+                select new
+                {
+                    a,
+                    u,
+                    t
+                };
+
+            var liss = listArticles.Where(el => el.t.name.Contains(tagQ) && el.u.username.Contains(authorQ)).ToList();
+
+            return Ok(liss);
         }
 
         [HttpPost, Authorize]
@@ -240,7 +301,7 @@ namespace realworld_api.Controllers
 
             if (sameArticles.Count == 0) return generatedSlug;
 
-            return $"{generatedSlug}-{sameArticles.Count + 1}";
+            return $"{generatedSlug}-{DateTime.Now:yyyyMMddHHmmssffff}";
         }
     }
 }
